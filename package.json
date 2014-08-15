@@ -1,0 +1,28 @@
+{
+  "name": "gg",
+  "version": "0.0.1",
+  "description": "Simple, declarative generator control.",
+  "keywords": [
+    "async",
+    "generator",
+    "coroutine",
+    "flow"
+  ],
+  "homepage": "https://github.com/candu/gg",
+  "author": {
+    "name": "Evan Savage",
+    "email": "savage.evan@gmail.com",
+    "url": "https://github.com/candu"
+  },
+  "main": "gg",
+  "scripts": {
+    "test": "npm install && mocha --harmony-generators"
+  },
+  "devDependencies": {
+    "chai": "1.9.x",
+    "mocha": "1.21.x",
+    "co-mocha": "0.0.x"
+  },
+  "license": "MIT",
+  "readmeFilename": "README.md"
+}
