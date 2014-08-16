@@ -145,6 +145,14 @@ describe('gg', function testGG() {
     throw new Error('oops.');
   }
 
+  function* baz() {
+    try {
+      yield gg.wait(bar());
+    } catch (err) {
+      throw err;
+    }
+  }
+
   function* noop() {}
 
   function* noResult() {
@@ -185,6 +193,16 @@ describe('gg', function testGG() {
     var threwException = false;
     try {
       var result = yield gg.wait(bar());
+    } catch (e) {
+      threwException = true;
+    }
+    expect(threwException).to.be.true;
+    yield gg.result(true);
+  });
+  it('multi-level exception handling works', function*() {
+    var threwException = false;
+    try {
+      var result = yield gg.wait(baz());
     } catch (e) {
       threwException = true;
     }
