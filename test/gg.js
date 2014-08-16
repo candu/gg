@@ -137,16 +137,61 @@ function* App() {
 }
 
 describe('gg', function testGG() {
-  function* foo() {
-    yield gg.result('test');
+  function* foo(value) {
+    yield gg.result(value);
+  }
+
+  function* bar() {
+    throw new Error('oops.');
+  }
+
+  function* noop() {}
+
+  function* noResult() {
+    yield gg.wait(foo(42));
   }
 
   it('.wait() works', function*() {
-    var result = yield gg.wait(foo());
+    var result = yield gg.wait(foo('test'));
     expect(result).to.equal('test');
     yield gg.result(true);
   });
-  it('works end-to-end', function() {
+  it('.waitAll() works', function*() {
+    var result;
+
+    result = yield gg.waitAll(foo('bar'));
+    expect(result).to.deep.equal(['bar']);
+
+    result = yield gg.waitAll([foo('bar')]);
+    expect(result).to.deep.equal(['bar']);
+
+    result = yield gg.waitAll(foo('baz'), foo('frob'));
+    expect(result).to.deep.equal(['baz', 'frob']);
+
+    result = yield gg.waitAll([foo('baz'), foo('frob')]);
+    expect(result).to.deep.equal(['baz', 'frob']);
+
+    yield gg.result(true);
+  });
+  it('.result() must be called', function() {
+    expect(function() {
+      gg.run(noop());
+    }).to.throw(Error);
+    expect(function() {
+      gg.run(noResult());
+    }).to.throw(Error);
+  });
+  it('exception handling works', function*() {
+    var threwException = false;
+    try {
+      var result = yield gg.wait(bar());
+    } catch (e) {
+      threwException = true;
+    }
+    expect(threwException).to.be.true;
+    yield gg.result(true);
+  });
+  it('.onDispatch() works', function() {
     gg.onDispatch(DT.dispatch);
     var result = gg.run(App());
     expect(result).to.equal('w00t');

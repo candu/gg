@@ -19,6 +19,8 @@
         this._waitIds[waitId] = true;
       }.bind(this));
     }
+    this._error = null;
+    this._hasError = false;
     this._result = null;
     this._hasResult = false;
   }
@@ -27,6 +29,16 @@
   };
   CallGraphNode.prototype.waitIds = function() {
     return Object.keys(this._waitIds);
+  };
+  CallGraphNode.prototype.setError = function(err) {
+    this._error = err;
+    this._hasError = true;
+  };
+  CallGraphNode.prototype.hasError = function() {
+    return this._hasError;
+  };
+  CallGraphNode.prototype.error = function() {
+    return this._error;
   };
   CallGraphNode.prototype.setResult = function(result) {
     this._result = result;
@@ -71,6 +83,18 @@
       this._nodes[genId] = new CallGraphNode(genId, waitIds);
     }
   };
+  CallGraph.prototype.setError = function(gen, err) {
+    var genId = this.id(gen);
+    this._nodes[genId].setError(err);
+  };
+  CallGraph.prototype.hasError = function(gen) {
+    var genId = this.id(gen);
+    return this._nodes[genId].hasError();
+  };
+  CallGraph.prototype.error = function(gen) {
+    var genId = this.id(gen);
+    return this._nodes[genId].error();
+  };
   CallGraph.prototype.setResult = function(gen, result) {
     var genId = this.id(gen);
     this._nodes[genId].setResult(result);
@@ -92,7 +116,7 @@
       var waitGensFinished = waitIds.every(function(waitId) {
         return this._nodes[waitId].hasResult();
       }.bind(this));
-      if (waitGensFinished && !node.hasResult()) {
+      if (waitGensFinished && !node.hasError() && !node.hasResult()) {
         runnableIds.push(genId);
       }
     }.bind(this));
@@ -131,14 +155,19 @@
   Dispatcher.runOneStep = function(gen, sendValue) {
     var oldCurrent = this._current;
     this._current = gen;
-    var yielded = gen.next(sendValue);
-    if (yielded.done) {
-      var id = this._graph.id(gen);
-      throw new Error('must yield result!');
-    } else if (yielded.value instanceof Result) {
-      this._graph.setResult(gen, yielded.value.value);
+    try {
+      var yielded = gen.next(sendValue);
+      if (yielded.done) {
+        throw new Error('must yield result!');
+      } else if (yielded.value instanceof Result) {
+        this._graph.setResult(gen, yielded.value.value);
+      }
+    } catch (err) {
+      this._graph.setError(gen, err);
+      oldCurrent.throw(err);
+    } finally {
+      this._current = oldCurrent;
     }
-    this._current = oldCurrent;
   };
   Dispatcher.wait = function(gen, waitGens) {
     this._graph.setNode(gen, waitGens);
