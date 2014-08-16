@@ -109,33 +109,6 @@ ObjMutator.setName = function*(id, name) {
   yield gg.result(null);
 };
 
-function* initDB() {
-  var userIds = yield gg.waitAll(
-      ObjMutator.create('foo'),
-      ObjMutator.create('bar'));
-  yield gg.result(userIds);
-}
-
-function* App() {
-  var userIds = yield gg.wait(initDB());
-  console.log(userIds);
-  var user = yield gg.wait(DT('Obj').gen(userIds[0]));
-  console.log(user);
-  var users = yield gg.waitAll(userIds.map(function(userId) {
-    return DT('Obj').gen(userId);
-  }));
-  console.log('users: ', users);
-  yield gg.wait(ObjMutator.setName(1, 'baz'));
-  users = yield gg.waitAll(userIds.map(function(userId) {
-    return DT('Obj').gen(userId);
-  }));
-  console.log('users: ', users);
-  var userId = yield gg.wait(ObjMutator.create('frob'));
-  user = yield gg.wait(DT('Obj').gen(userId));
-  console.log('user: ', user);
-  yield gg.result('w00t');
-}
-
 describe('gg', function testGG() {
   function* foo(value) {
     yield gg.result(value);
@@ -209,9 +182,45 @@ describe('gg', function testGG() {
     expect(threwException).to.be.true;
     yield gg.result(true);
   });
-  it('.onDispatch() works', function() {
+  it('.onDispatch() works', function*() {
+    function userValue(id, name) {
+      var value = {};
+      value[id] = {id: id, name: name};
+      return value;
+    }
+
     gg.onDispatch(DT.dispatch);
-    var result = gg.run(App());
-    expect(result).to.equal('w00t');
+
+    var userIds = yield gg.waitAll(
+      ObjMutator.create('foo'),
+      ObjMutator.create('bar'));
+    expect(userIds).to.deep.equal([1, 2]);
+
+    var user = yield gg.wait(DT('Obj').gen(1));
+    expect(user).to.deep.equal(userValue(1, 'foo'));
+
+    var users = yield gg.waitAll(DT('Obj').gen(1), DT('Obj').gen(2));
+    expect(users).to.deep.equal([
+      userValue(1, 'foo'),
+      userValue(2, 'bar')
+    ]);
+
+    yield gg.wait(ObjMutator.setName(1, 'frob'));
+
+    users = yield gg.waitAll(userIds.map(function(userId) {
+      return DT('Obj').gen(userId);
+    }));
+    expect(users).to.deep.equal([
+      userValue(1, 'frob'),
+      userValue(2, 'bar')
+    ]);
+
+    var userId = yield gg.wait(ObjMutator.create('zow'));
+    expect(userId).to.equal(3);
+
+    user = yield gg.wait(DT('Obj').gen(userId));
+    expect(user).to.deep.equal(userValue(3, 'zow'));
+
+    yield gg.result(true);
   });
 });
