@@ -131,7 +131,6 @@
   Dispatcher.runOneStep = function(gen, sendValue) {
     var oldCurrent = this._current;
     this._current = gen;
-    debugger;
     var yielded = gen.next(sendValue);
     if (yielded.done) {
       var id = this._graph.id(gen);

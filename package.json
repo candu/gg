@@ -20,8 +20,7 @@
   },
   "devDependencies": {
     "chai": "1.9.x",
-    "mocha": "1.21.x",
-    "co-mocha": "0.0.x"
+    "mocha": "1.21.x"
   },
   "license": "MIT",
   "readmeFilename": "README.md"

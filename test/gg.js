@@ -118,8 +118,9 @@ function* initDB() {
 
 function* App() {
   var userIds = yield gg.wait(initDB());
+  console.log(userIds);
   var user = yield gg.wait(DT('Obj').gen(userIds[0]));
-  console.log('user: ', user);
+  console.log(user);
   var users = yield gg.waitAll(userIds.map(function(userId) {
     return DT('Obj').gen(userId);
   }));
@@ -136,9 +137,17 @@ function* App() {
 }
 
 describe('gg', function testGG() {
-  it('works', function () {
+  function* foo() {
+    yield gg.result('test');
+  }
+
+  it('.wait() works', function*() {
+    var result = yield gg.wait(foo());
+    expect(result).to.equal('test');
+    yield gg.result(true);
+  });
+  it('works end-to-end', function() {
     gg.onDispatch(DT.dispatch);
-    debugger;
     var result = gg.run(App());
     expect(result).to.equal('w00t');
   });
