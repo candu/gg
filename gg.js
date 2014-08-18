@@ -7,17 +7,15 @@
 
   function CallGraphNode(id, waitIds) {
     this._id = id;
-    this._waitIds = {};
+    this._waitIds = [];
     if (waitIds === null) {
       this._type = NodeType.LEAF;
     } else if (!(waitIds instanceof Array)) {
       this._type = NodeType.WAIT;
-      this._waitIds[waitIds] = true;
+      this._waitIds = [waitIds];
     } else {
       this._type = NodeType.WAITV;
-      waitIds.forEach(function(waitId) {
-        this._waitIds[waitId] = true;
-      }.bind(this));
+      this._waitIds = waitIds;
     }
     this._error = null;
     this._hasError = false;
@@ -28,7 +26,7 @@
     return this._type;
   };
   CallGraphNode.prototype.waitIds = function() {
-    return Object.keys(this._waitIds);
+    return this._waitIds;
   };
   CallGraphNode.prototype.setError = function(err) {
     this._error = err;
@@ -72,7 +70,6 @@
   };
   CallGraph.prototype.setNode = function(gen, waitGens) {
     var genId = this.id(gen);
-    this._nodes[genId] = new CallGraphNode(genId, null);
     if (waitGens === null) {
       this._nodes[genId] = new CallGraphNode(genId, null);
     } else if (!(waitGens instanceof Array)) {
