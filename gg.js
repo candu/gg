@@ -110,7 +110,8 @@
       var node = this._nodes[genId];
       var waitIds = node.waitIds();
       var waitGensFinished = waitIds.every(function(waitId) {
-        return this._nodes[waitId].hasResult();
+        var waitNode = this._nodes[waitId];
+        return waitNode.hasError() || waitNode.hasResult();
       }.bind(this));
       if (waitGensFinished && !node.hasError() && !node.hasResult()) {
         runnableIds.push(genId);
@@ -165,15 +166,6 @@
   };
   Dispatcher.wait = function(gen, waitGens) {
     this._graph.setNode(gen, waitGens);
-    if (waitGens === null) {
-      return;
-    }
-    if (!(waitGens instanceof Array)) {
-      waitGens = [waitGens];
-    }
-    waitGens.forEach(function(waitGen) {
-      this.runOneStep(waitGen);
-    }.bind(this));
   };
   Dispatcher.run = function(main) {
     this._current = main;
