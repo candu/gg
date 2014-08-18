@@ -50,20 +50,19 @@
   };
 
   function CallGraph() {
-    this._gens = [];
+    this._gens = {};
     this._nodes = {};
     this._result = null;
     this._hasResult = false;
   }
+  CallGraph._NEXT_ID = 0;
   CallGraph.prototype.id = function(gen) {
-    var genId = this._gens.indexOf(gen);
-    if (genId !== -1) {
-      return genId;
+    if (!('__id' in gen)) {
+      gen.__id = CallGraph._NEXT_ID++;
+      this._gens[gen.__id] = gen;
+      this.setNode(gen, null);
     }
-    genId = this._gens.length;
-    this._gens.push(gen);
-    this.setNode(gen, null);
-    return genId;
+    return gen.__id;
   };
   CallGraph.prototype.gen = function(genId) {
     return this._gens[genId];
