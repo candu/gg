@@ -158,9 +158,7 @@
     try {
       var yielded = gen.next(sendValue);
       if (yielded.done) {
-        throw new Error('must yield result!');
-      } else if (yielded.value instanceof Result) {
-        this._graph.setResult(gen, yielded.value.value);
+        this._graph.setResult(gen, yielded.value);
       }
     } catch (err) {
       this._graph.setError(gen, err);
@@ -213,14 +211,6 @@
       waitGens = Array.prototype.slice.call(arguments);
     }
     Dispatcher.wait(gen, waitGens);
-  };
-
-  function Result(value) {
-    this.value = value;
-  }
-
-  gg.result = function(value) {
-    return new Result(value);
   };
 
   gg.onDispatch = function(callback) {

@@ -83,7 +83,7 @@ AbstractDataType.prototype.gen = function*(ids) {
     var key = this.cacheKey(id);
     objs[id] = this._cache[key];
   }.bind(this));
-  yield gg.result(objs);
+  return objs;
 };
 AbstractDataType.prototype.dirty = function(id) {
   var key = this.cacheKey(id);
@@ -101,17 +101,16 @@ DT.register('Obj', ObjDataType);
 
 var ObjMutator = {};
 ObjMutator.create = function*(name) {
-  yield gg.result(insert(name));
+  return insert(name);
 };
 ObjMutator.setName = function*(id, name) {
   update(id, name);
   DT('Obj').dirty(id);
-  yield gg.result(null);
 };
 
 describe('gg', function testGG() {
   function* foo(value) {
-    yield gg.result(value);
+    return value;
   }
 
   function* bar() {
@@ -128,14 +127,13 @@ describe('gg', function testGG() {
 
   function* noop() {}
 
-  function* noResult() {
+  function* noReturn() {
     yield gg.wait(foo(42));
   }
 
   it('.wait() works', function*() {
     var result = yield gg.wait(foo('test'));
     expect(result).to.equal('test');
-    yield gg.result(true);
   });
   it('.waitAll() works', function*() {
     var result;
@@ -151,16 +149,10 @@ describe('gg', function testGG() {
 
     result = yield gg.waitAll([foo('baz'), foo('frob')]);
     expect(result).to.deep.equal(['baz', 'frob']);
-
-    yield gg.result(true);
   });
-  it('.result() must be called', function() {
-    expect(function() {
-      gg.run(noop());
-    }).to.throw(Error);
-    expect(function() {
-      gg.run(noResult());
-    }).to.throw(Error);
+  it('implicit return works', function() {
+    expect(gg.run(noop())).to.be.undefined;
+    expect(gg.run(noReturn())).to.be.undefined;
   });
   it('exception handling works', function*() {
     var threwException = false;
@@ -170,7 +162,6 @@ describe('gg', function testGG() {
       threwException = true;
     }
     expect(threwException).to.be.true;
-    yield gg.result(true);
   });
   it('multi-level exception handling works', function*() {
     var threwException = false;
@@ -180,7 +171,6 @@ describe('gg', function testGG() {
       threwException = true;
     }
     expect(threwException).to.be.true;
-    yield gg.result(true);
   });
   it('.onDispatch() works', function*() {
     function userValue(id, name) {
@@ -220,7 +210,5 @@ describe('gg', function testGG() {
 
     user = yield gg.wait(DT('Obj').gen(userId));
     expect(user).to.deep.equal(userValue(3, 'zow'));
-
-    yield gg.result(true);
   });
 });
