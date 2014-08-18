@@ -133,6 +133,32 @@
     }.bind(this));
   };
 
+  function parallel(tasks, done) {
+    var n = tasks.length;
+    if (n === 0) {
+      done(null, []);
+    }
+    var numDone = 0;
+    var error = null;
+    var results = new Array(n);
+    tasks.forEach(function(task, i) {
+      task(function(err, result) {
+        if (err) {
+          error = err;
+        } else {
+          results[i] = result;
+        }
+        if (++numDone === n) {
+          if (error) {
+            done(error);
+          } else {
+            done(null, results);
+          }
+        }
+      });
+    });
+  }
+
   var Dispatcher = {
     _graph: new CallGraph(),
     _current: null,
@@ -144,12 +170,13 @@
   Dispatcher.onDispatch = function(callback) {
     this._dispatchCallbacks.push(callback);
   };
-  Dispatcher.dispatch = function() {
+  Dispatcher.dispatch = function(done) {
     this._dispatchCallbacks.forEach(function(callback) {
       callback();
     });
+    done();
   };
-  Dispatcher.runOneStep = function(gen, sendValue) {
+  Dispatcher.runOneStep = function(gen, sendValue, done) {
     var oldCurrent = this._current;
     this._current = gen;
     try {
@@ -162,24 +189,46 @@
       oldCurrent.throw(err);
     } finally {
       this._current = oldCurrent;
+      done();
     }
   };
   Dispatcher.wait = function(gen, waitGens) {
     this._graph.setNode(gen, waitGens);
   };
-  Dispatcher.run = function(main) {
+  Dispatcher.runLoop = function(main, done) {
+    if (this._graph.hasError(main)) {
+      return done(this._graph.error(main));
+    }
+    if (this._graph.hasResult(main)) {
+      return done(null, this._graph.result(main));
+    }
+    this.dispatch(function(err) {
+      if (err) {
+        throw err;
+      }
+      var runnable = this._graph.getRunnableIds();
+      var tasks = runnable.map(function(genId) {
+        return function(callback) {
+          var gen = this._graph.gen(genId);
+          var sendValue = this._graph.getSendValue(gen);
+          this.runOneStep(gen, sendValue, callback);
+        }.bind(this);
+      }.bind(this));
+      parallel(tasks, function(err) {
+        if (err) {
+          throw err;
+        }
+        // TODO: setImmediate polyfill for better performance
+        setTimeout(function() {
+          this.runLoop(main, done);
+        }.bind(this), 0);
+      }.bind(this));
+    }.bind(this));
+  };
+  Dispatcher.run = function(main, done) {
     this._current = main;
     this.wait(main, null);
-    while (!this._graph.hasResult(main)) {
-      this.dispatch();
-      var runnable = this._graph.getRunnableIds();
-      runnable.forEach(function(genId) {
-        var gen = this._graph.gen(genId);
-        var sendValue = this._graph.getSendValue(gen);
-        this.runOneStep(gen, sendValue);
-      }.bind(this));
-    }
-    return this._graph.result(main);
+    this.runLoop(main, done);
   };
 
   var gg = {};
@@ -205,15 +254,15 @@
     Dispatcher.onDispatch(callback);
   };
 
-  gg.run = function(main) {
-    return Dispatcher.run(main);
+  gg.run = function(main, done) {
+    Dispatcher.run(main, done);
   };
 
   var root = this;
   var ggOld = root.gg;
 
   gg.noConflict = function() {
-    root.g = gOld;
+    root.gg = ggOld;
     return this;
   };
 

@@ -16,7 +16,7 @@
   },
   "main": "gg",
   "scripts": {
-    "test": "npm install && mocha --harmony-generators"
+    "test": "mocha --harmony --require 'test/test-support'"
   },
   "devDependencies": {
     "chai": "1.9.x",

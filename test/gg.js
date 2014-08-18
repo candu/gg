@@ -150,9 +150,14 @@ describe('gg', function testGG() {
     result = yield gg.waitAll([foo('baz'), foo('frob')]);
     expect(result).to.deep.equal(['baz', 'frob']);
   });
-  it('implicit return works', function() {
-    expect(gg.run(noop())).to.be.undefined;
-    expect(gg.run(noReturn())).to.be.undefined;
+  it('implicit return works', function*() {
+    var result;
+
+    result = yield gg.wait(noop());
+    expect(result).to.be.undefined;
+
+    result = yield gg.wait(noReturn());
+    expect(result).to.be.undefined;
   });
   it('exception handling works', function*() {
     var threwException = false;
