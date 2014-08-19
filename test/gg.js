@@ -1,4 +1,5 @@
 var gg = require('gg'),
+    async = require('async'),
     chai = require('chai'),
     expect = chai.expect;
 
@@ -41,12 +42,13 @@ var DT = (function() {
   _DT.register = function(name, instance) {
     _instances[name] = instance;
   };
-  _DT.dispatch = function() {
+  _DT.dispatch = function(done) {
     var instanceNames = Object.keys(_instances);
-    instanceNames.forEach(function(name) {
+    var tasks = instanceNames.map(function(name) {
       var instance = _instances[name];
-      instance.dispatch();
+      return instance.dispatch.bind(instance);
     });
+    async.parallel(tasks, done);
   };
   return _DT;
 })();
@@ -55,20 +57,21 @@ function AbstractDataType() {
   this._cache = {};
   this._idsToFetch = {};
 }
-AbstractDataType.prototype.dispatch = function() {
+AbstractDataType.prototype.dispatch = function(done) {
   var ids = Object.keys(this._idsToFetch).filter(function(id) {
     var key = this.cacheKey(id);
     return !(key in this._cache);
   }.bind(this));
   this._idsToFetch = {};
   if (ids.length === 0) {
-    return;
+    return done();
   }
   var values = this.fetch(ids);
   ids.forEach(function(id) {
     var key = this.cacheKey(id);
     this._cache[key] = values[id];
   }.bind(this));
+  done();
 };
 AbstractDataType.prototype.gen = function*(ids) {
   if (!(ids instanceof Array)) {

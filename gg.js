@@ -171,10 +171,7 @@
     this._dispatchCallbacks.push(callback);
   };
   Dispatcher.dispatch = function(done) {
-    this._dispatchCallbacks.forEach(function(callback) {
-      callback();
-    });
-    done();
+    parallel(this._dispatchCallbacks, done);
   };
   Dispatcher.runOneStep = function(gen, sendValue, done) {
     var oldCurrent = this._current;
