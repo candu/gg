@@ -1,12 +1,61 @@
 (function() {
   // TODO: "garbage collection" of unused CallGraph nodes
 
+  // HELPER FUNCTIONS
+
+  // NOTE: we implement our own version of async.parallel() to avoid
+  // introducing a dependency there.
+  function parallel(tasks, done) {
+    var n = tasks.length;
+    if (n === 0) {
+      done(null, []);
+    }
+    var numDone = 0;
+    var error = null;
+    var results = new Array(n);
+    tasks.forEach(function(task, i) {
+      task(function(err, result) {
+        if (err) {
+          error = err;
+        } else {
+          results[i] = result;
+        }
+        if (++numDone === n) {
+          if (error) {
+            done(error);
+          } else {
+            done(null, results);
+          }
+        }
+      });
+    });
+  }
+
+  // NOTE: these functions are cribbed from https://github.com/visionmedia/co
+  function isGenerator(obj) {
+    return obj && 'function' == typeof obj.next && 'function' == typeof obj.throw;
+  }
+
+  function isPromise(obj) {
+    return obj && 'function' == typeof obj.then;
+  }
+
+  function isThunk(obj) {
+    return 'function' == typeof obj;
+  }
+
+  // CALL GRAPH
+
   var NodeType = {
     LEAF: 1,
     WAIT: 2,
     WAITV: 3
   };
 
+  /**
+   * A CallGraphNode represents a single call to gg.wait() or gg.waitAll(), and
+   * is used to collect errors/results for that call.
+   */
   function CallGraphNode(id, waitIds) {
     this._id = id;
     this._waitIds = [];
@@ -51,6 +100,12 @@
     return this._result;
   };
 
+  /**
+   * CallGraph keeps track of all gg.wait() or gg.waitAll() calls using
+   * CallGraphNodes.  It also maintains a mapping from specific generators,
+   * thunks, and promises to those CallGraphNodes, so that errors/results
+   * can be passed to their intended recipients.
+   */
   function CallGraph() {
     this._objs = {};
     this._nodes = {};
@@ -106,6 +161,8 @@
     return this._nodes[objId].result();
   };
   CallGraph.prototype.getRunnableIds = function() {
+    // NOTE: an object is runnable if a) it isn't waiting on anything to
+    // complete, and b) it hasn't yet completed itself.
     var runnableIds = [];
     var nodeIds = Object.keys(this._nodes);
     nodeIds.forEach(function(objId) {
@@ -122,58 +179,35 @@
     return runnableIds;
   };
   CallGraph.prototype.getSendValue = function(gen) {
+    if (!isGenerator(gen)) {
+      return null;
+    }
     var genId = this.id(gen);
     var node = this._nodes[genId];
+    var nodeType = node.type();
     var waitIds = node.waitIds();
-    if (node.type() === NodeType.WAIT) {
+    switch (nodeType) {
+    case NodeType.LEAF:
+      return null;
+    case NodeType.WAIT:
       var waitNode = this._nodes[waitIds[0]];
       return waitNode.result();
+    case NodeType.WAITV:
+      return waitIds.map(function(waitId) {
+        var waitNode = this._nodes[waitId];
+        return waitNode.result();
+      }.bind(this));
     }
-    return waitIds.map(function(waitId) {
-      var waitNode = this._nodes[waitId];
-      return waitNode.result();
-    }.bind(this));
   };
 
-  function parallel(tasks, done) {
-    var n = tasks.length;
-    if (n === 0) {
-      done(null, []);
-    }
-    var numDone = 0;
-    var error = null;
-    var results = new Array(n);
-    tasks.forEach(function(task, i) {
-      task(function(err, result) {
-        if (err) {
-          error = err;
-        } else {
-          results[i] = result;
-        }
-        if (++numDone === n) {
-          if (error) {
-            done(error);
-          } else {
-            done(null, results);
-          }
-        }
-      });
-    });
-  }
+  // DISPATCHER
 
-  // NOTE: these functions are cribbed from https://github.com/visionmedia/co
-  function isGenerator(obj) {
-    return obj && 'function' == typeof obj.next && 'function' == typeof obj.throw;
-  }
-
-  function isPromise(obj) {
-    return obj && 'function' == typeof obj.then;
-  }
-
-  function isThunk(obj) {
-    return 'function' == typeof obj;
-  }
-
+  /**
+   * Dispatcher manages the CallGraph, adding/removing nodes and passing values
+   * into generators as necessary.  It provides an entry point from
+   * non-generator-based code, and also handles delegation to promises and
+   * thunks when needed.
+   */
   var Dispatcher = {
     _graph: new CallGraph(),
     _current: null,
@@ -265,6 +299,8 @@
         if (err) {
           throw err;
         }
+        // NOTE: if you're running this from the browser, you'll need a
+        // polyfill for setImmediate().
         setImmediate(function() {
           this.runLoop(main, done);
         }.bind(this));
@@ -277,29 +313,50 @@
     this.runLoop(main, done);
   };
 
+  // PUBLIC INTERFACE
+
   var gg = {};
 
-  gg.wait = function(waitGen) {
-    waitGen = waitGen || null;
+  /**
+   * Wait on a single generator, promise, or thunk.
+   */
+  gg.wait = function(waitObj) {
+    waitObj = waitObj || null;
     var gen = Dispatcher.current();
-    Dispatcher.wait(gen, waitGen);
+    Dispatcher.wait(gen, waitObj);
   };
 
-  gg.waitAll = function(waitGens /* , waitGen, ... */) {
+  /**
+   * Wait on several objects at once, and receive an array of results in the
+   * same order.  You can call this with a single array, or you can call it
+   * varargs-style.  These are identical:
+   *
+   * var results = yield gg.waitAll(gen1(), gen2());
+   * var results = yield gg.waitAll([gen1(), gen2()]);
+   */
+  gg.waitAll = function(waitObjs /* , waitObj, ... */) {
     var gen = Dispatcher.current();
-    var waitGens;
+    var waitObjs;
     if (arguments.length === 1 && arguments[0] instanceof Array) {
-      waitGens = arguments[0];
+      waitObjs = arguments[0];
     } else {
-      waitGens = Array.prototype.slice.call(arguments);
+      waitObjs = Array.prototype.slice.call(arguments);
     }
-    Dispatcher.wait(gen, waitGens);
+    Dispatcher.wait(gen, waitObjs);
   };
 
+  /**
+   * Add a callback to be run during the dispatch phase.  This allows for
+   * batching of operations across generators; see test/gg.js for an example.
+   */
   gg.onDispatch = function(callback) {
     Dispatcher.onDispatch(callback);
   };
 
+  /**
+   * The main entry point.  Use this to run a generator to completion,
+   * receiving any error/result via the "done" callback.
+   */
   gg.run = function(main, done) {
     Dispatcher.run(main, done);
   };
@@ -311,6 +368,8 @@
     root.gg = ggOld;
     return this;
   };
+
+  // NODE, AMD COMPATIBILITY
 
   if (typeof exports !== 'undefined') {
     if (typeof module !== 'undefined' && module.exports) {

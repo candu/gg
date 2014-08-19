@@ -16,7 +16,6 @@
   },
   "main": "build/gg",
   "scripts": {
-    "install": "make",
     "test": "npm install && mocha --harmony --require 'test/test-support'"
   },
   "devDependencies": {
