@@ -14,9 +14,10 @@
     "email": "savage.evan@gmail.com",
     "url": "https://github.com/candu"
   },
-  "main": "gg",
+  "main": "build/gg",
   "scripts": {
-    "test": "mocha --harmony --require 'test/test-support'"
+    "install": "make",
+    "test": "npm install && mocha --harmony --require 'test/test-support'"
   },
   "devDependencies": {
     "chai": "1.9.x",

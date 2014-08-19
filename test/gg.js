@@ -1,4 +1,4 @@
-var gg = require('../gg'),
+var gg = require('gg'),
     chai = require('chai'),
     expect = chai.expect;
 

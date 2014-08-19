@@ -218,10 +218,9 @@
         if (err) {
           throw err;
         }
-        // TODO: setImmediate polyfill for better performance
-        setTimeout(function() {
+        setImmediate(function() {
           this.runLoop(main, done);
-        }.bind(this), 0);
+        }.bind(this));
       }.bind(this));
     }.bind(this));
   };
