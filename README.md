@@ -3,12 +3,18 @@
 `gg` manages generator execution in a simple, declarative manner that allows
 for both serial and parallel execution of asynchronous requests.
 
+## Platform Compatibility
 
-`gg` is compatible with:
+`gg` has the same requirements as [`co`](https://github.com/visionmedia/co):
 
-* node.js 0.11 and above;
-* any browser that supports [ES6 generators](http://tobyho.com/2013/06/16/what-are-generators/);
-* [RequireJS](http://requirejs.org/)-style module loading.
+When using node 0.11.x or greater, you must use the `--harmony-generators` flag
+or just `--harmony` to get access to generators.
+
+When using node 0.10.x and lower or browsers without generator support, you
+must use [gnode](https://github.com/TooTallNate/gnode) and/or [regenerator](https://facebook.github.io/regenerator/).
+
+When using node 0.8.x and lower or browsers without [setImmediate](https://developer.mozilla.org/en-US/docs/Web/API/window.setImmediate),
+you must include a [setImmediate polyfill](https://github.com/YuzuJS/setImmediate).
 
 ## Installing
 
@@ -18,8 +24,132 @@ for both serial and parallel execution of asynchronous requests.
 
 ### from source
 
-    TODO: this
+    git clone git://github.com/candu/gg.git
+    cd gg
+    npm install
 
 ## Usage
 
-    TODO: this
+These examples are adapted from `test/gg.js`, which you can run via
+
+    npm test
+
+### Waiting
+
+    function* foo(value) {
+      return value;
+    }
+
+    function* main() {
+      var result;
+      
+      // use gg.wait() to wait for a single generator
+      result = yield gg.wait(foo('test'));
+      expect(result).to.equal('test');
+      
+      // use gg.waitAll() to wait for several generators (in parallel)
+      result = yield gg.waitAll(foo('baz'), foo('frob'));
+      expect(result).to.deep.equal(['baz', 'frob']);
+      
+      // you can also just pass an Array to gg.waitAll()
+      result = yield gg.waitAll([foo('baz'), foo('frob')]);
+      expect(result).to.deep.equal(['baz', 'frob']);
+
+      return true;
+    }
+
+    gg.run(main(), function(err, result) {
+      expect(result).to.be.true;
+    });
+
+### Error Handling
+
+    function* bar(msg) {
+      // just throw an error as you would normally
+      throw new Error(msg);
+    }
+
+    function* main() {
+      var threwException = false;
+      try {
+        var result = yield gg.wait(bar('zow'));
+      } catch (err) {
+        // exceptions are thrown into the waiting generator
+        expect(err.message).to.equal('zow');
+        threwException = true;
+      }
+      expect(threwException).to.be.true;
+      yield gg.wait(bar('biff'));
+    });
+    
+    gg.run(main(), function(err, result) {
+      // gg.run() collects any uncaught exceptions
+      expect(err.message).to.equal('biff');
+    });
+
+### Thunks and Promises
+
+    var fs = require('fs'),
+        Q = require('q');
+
+    function sizeThunk(file) {
+      return function(fn){
+        fs.stat(file, function(err, stat){
+          if (err) return fn(err);
+          fn(null, stat.size);
+        });
+      }
+    }
+    
+    function size(file, fn) {
+      fs.stat(file, function(err, stat) {
+        if (err) return fn(err);
+        fn(null, stat.size);
+      });
+    }
+    var sizePromise = Q.denodeify(size);
+
+    function* main() {
+      // you can also wait on thunks or promises
+      var result = yield gg.waitAll(
+        sizeThunk('test/gg.js'),
+        sizePromise('test/gg.js'));
+      expect(result[0]).to.equal(result[1]);
+    }
+
+### Dispatching
+
+In pseudocode, the core loop of `gg` looks like this:
+
+    while (!main.isFinished()) {    // the same main passed to gg.run()
+      dispatch();                   // see below
+      runOneStep();                 // run everything we can
+    }
+
+`gg.onDispatch()` allows you to attach your own functions to be called during
+that `dispatch()` step.
+
+Why would you want to do this?  Suppose you're building a web page, and you
+need to fetch a bunch of users:
+
+    function* navbar(req) {
+      var user = yield gg.wait(fetchUser(uid1));
+      // ...
+    }
+
+    function* feed(req) {
+      var users = yield gg.waitAll([uid2, uid3, uid4].map(fetchUser));
+      // ...
+    }
+
+    function* home(req) {
+      var parts = yield gg.waitAll(navbar(req), feed(req)); 
+      return combinePartsIntoPage(parts);
+    }
+
+Ideally, we'd fetch `uid1, ..., uid4` in one database query.  `dispatch()`
+allows you to do exactly that, by providing a hook for batched operations to
+execute during the core loop.
+
+If you're curious what such a batched operation would look like, you can
+see a fleshed-out example in `test/gg.js`.
