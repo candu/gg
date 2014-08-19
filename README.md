@@ -13,8 +13,8 @@ or just `--harmony` to get access to generators.
 When using node 0.10.x and lower or browsers without generator support, you
 must use [gnode](https://github.com/TooTallNate/gnode) and/or [regenerator](https://facebook.github.io/regenerator/).
 
-When using node 0.8.x and lower or browsers without [setImmediate](https://developer.mozilla.org/en-US/docs/Web/API/window.setImmediate),
-you must include a [setImmediate polyfill](https://github.com/YuzuJS/setImmediate).
+When using node 0.8.x and lower or browsers without [`setImmediate`](https://developer.mozilla.org/en-US/docs/Web/API/window.setImmediate),
+you must include a [`setImmediate` polyfill](https://github.com/YuzuJS/setImmediate).
 
 ## Installing
 
