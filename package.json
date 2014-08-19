@@ -22,7 +22,8 @@
   "devDependencies": {
     "async": "0.9.x",
     "chai": "1.9.x",
-    "mocha": "1.21.x"
+    "mocha": "1.21.x",
+    "q": "1.0.x"
   },
   "license": "MIT",
   "readmeFilename": "README.md"

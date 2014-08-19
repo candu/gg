@@ -1,7 +1,9 @@
 var gg = require('gg'),
     async = require('async'),
     chai = require('chai'),
-    expect = chai.expect;
+    expect = chai.expect,
+    fs = require('fs'),
+    Q = require('q');
 
 var DB = {
   _nextId: 1
@@ -218,5 +220,49 @@ describe('gg', function testGG() {
 
     user = yield gg.wait(DT('Obj').gen(userId));
     expect(user).to.deep.equal(userValue(3, 'zow'));
+  });
+  it('wait on thunk works', function*() {
+    // example from https://github.com/visionmedia/co
+    function size(file) {
+      return function(fn){
+        fs.stat(file, function(err, stat){
+          if (err) return fn(err);
+          fn(null, stat.size);
+        });
+      }
+    }
+
+    var result = yield gg.waitAll(size('test/gg.js'), size('test/gg.js'));
+    expect(result.length).to.equal(2);
+    expect(result[0]).to.equal(result[1]);
+
+    var threwException = false;
+    try {
+      var result = yield gg.wait(size('invalid.file'));
+    } catch (e) {
+      threwException = true;
+    }
+    expect(threwException).to.be.true;
+  });
+  it('wait on promise works', function*() {
+    function size(file, fn) {
+      fs.stat(file, function(err, stat) {
+        if (err) return fn(err);
+        fn(null, stat.size);
+      });
+    }
+    var sizeP = Q.denodeify(size);
+
+    var result = yield gg.waitAll(sizeP('test/gg.js'), sizeP('test/gg.js'));
+    expect(result.length).to.equal(2);
+    expect(result[0]).to.equal(result[1]);
+
+    var threwException = false;
+    try {
+      var result = yield gg.wait(sizeP('invalid.file'));
+    } catch (e) {
+      threwException = true;
+    }
+    expect(threwException).to.be.true;
   });
 });

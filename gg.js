@@ -195,6 +195,7 @@
         done();
       }.bind(this), function(err) {
         this._graph.setError(promise, err);
+        this._current.throw(err);
         done();
       }.bind(this));
   };
@@ -202,6 +203,7 @@
     thunk(function(err, result) {
       if (err) {
         this._graph.setError(thunk, err);
+        this._current.throw(err);
       } else {
         this._graph.setResult(thunk, result);
       }
