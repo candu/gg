@@ -1,4 +1,6 @@
 (function() {
+  // TODO: "garbage collection" of unused CallGraph nodes
+
   var NodeType = {
     LEAF: 1,
     WAIT: 2,
@@ -50,71 +52,71 @@
   };
 
   function CallGraph() {
-    this._gens = {};
+    this._objs = {};
     this._nodes = {};
     this._result = null;
     this._hasResult = false;
   }
   CallGraph._NEXT_ID = 0;
-  CallGraph.prototype.id = function(gen) {
-    if (!('__id' in gen)) {
-      gen.__id = CallGraph._NEXT_ID++;
-      this._gens[gen.__id] = gen;
-      this.setNode(gen, null);
+  CallGraph.prototype.id = function(obj) {
+    if (!('__id' in obj)) {
+      obj.__id = CallGraph._NEXT_ID++;
+      this._objs[obj.__id] = obj;
+      this.setNode(obj, null);
     }
-    return gen.__id;
+    return obj.__id;
   };
-  CallGraph.prototype.gen = function(genId) {
-    return this._gens[genId];
+  CallGraph.prototype.obj = function(objId) {
+    return this._objs[objId];
   };
-  CallGraph.prototype.setNode = function(gen, waitGens) {
-    var genId = this.id(gen);
+  CallGraph.prototype.setNode = function(obj, waitGens) {
+    var objId = this.id(obj);
     if (waitGens === null) {
-      this._nodes[genId] = new CallGraphNode(genId, null);
+      this._nodes[objId] = new CallGraphNode(objId, null);
     } else if (!(waitGens instanceof Array)) {
       var waitId = this.id(waitGens);
-      this._nodes[genId] = new CallGraphNode(genId, waitId);
+      this._nodes[objId] = new CallGraphNode(objId, waitId);
     } else {
       var waitIds = waitGens.map(this.id.bind(this));
-      this._nodes[genId] = new CallGraphNode(genId, waitIds);
+      this._nodes[objId] = new CallGraphNode(objId, waitIds);
     }
   };
-  CallGraph.prototype.setError = function(gen, err) {
-    var genId = this.id(gen);
-    this._nodes[genId].setError(err);
+  CallGraph.prototype.setError = function(obj, err) {
+    var objId = this.id(obj);
+    this._nodes[objId].setError(err);
   };
-  CallGraph.prototype.hasError = function(gen) {
-    var genId = this.id(gen);
-    return this._nodes[genId].hasError();
+  CallGraph.prototype.hasError = function(obj) {
+    var objId = this.id(obj);
+    return this._nodes[objId].hasError();
   };
-  CallGraph.prototype.error = function(gen) {
-    var genId = this.id(gen);
-    return this._nodes[genId].error();
+  CallGraph.prototype.error = function(obj) {
+    var objId = this.id(obj);
+    return this._nodes[objId].error();
   };
-  CallGraph.prototype.setResult = function(gen, result) {
-    var genId = this.id(gen);
-    this._nodes[genId].setResult(result);
+  CallGraph.prototype.setResult = function(obj, result) {
+    var objId = this.id(obj);
+    this._nodes[objId].setResult(result);
   };
-  CallGraph.prototype.hasResult = function(gen) {
-    var genId = this.id(gen);
-    return this._nodes[genId].hasResult();
+  CallGraph.prototype.hasResult = function(obj) {
+    var objId = this.id(obj);
+    return this._nodes[objId].hasResult();
   };
-  CallGraph.prototype.result = function(gen) {
-    var genId = this.id(gen);
-    return this._nodes[genId].result();
+  CallGraph.prototype.result = function(obj) {
+    var objId = this.id(obj);
+    return this._nodes[objId].result();
   };
   CallGraph.prototype.getRunnableIds = function() {
     var runnableIds = [];
     var nodeIds = Object.keys(this._nodes);
-    nodeIds.forEach(function(genId) {
-      var node = this._nodes[genId];
+    nodeIds.forEach(function(objId) {
+      var node = this._nodes[objId];
       var waitIds = node.waitIds();
       var waitGensFinished = waitIds.every(function(waitId) {
         var waitNode = this._nodes[waitId];
         return waitNode.hasError() || waitNode.hasResult();
       }.bind(this));
       if (waitGensFinished && !node.hasError() && !node.hasResult()) {
-        runnableIds.push(genId);
+        runnableIds.push(objId);
       }
     }.bind(this));
     return runnableIds;
@@ -159,6 +161,19 @@
     });
   }
 
+  // NOTE: these functions are cribbed from https://github.com/visionmedia/co
+  function isGenerator(obj) {
+    return obj && 'function' == typeof obj.next && 'function' == typeof obj.throw;
+  }
+
+  function isPromise(obj) {
+    return obj && 'function' == typeof obj.then;
+  }
+
+  function isThunk(obj) {
+    return 'function' == typeof obj;
+  }
+
   var Dispatcher = {
     _graph: new CallGraph(),
     _current: null,
@@ -173,10 +188,31 @@
   Dispatcher.dispatch = function(done) {
     parallel(this._dispatchCallbacks, done);
   };
-  Dispatcher.runOneStep = function(gen, sendValue, done) {
+  Dispatcher.runPromise = function(promise, done) {
+    promise
+      .then(function(result) {
+        this._graph.setResult(promise, result);
+        done();
+      }.bind(this), function(err) {
+        this._graph.setError(promise, err);
+        done();
+      }.bind(this));
+  };
+  Dispatcher.runThunk = function(thunk, done) {
+    thunk(function(err, result) {
+      if (err) {
+        this._graph.setError(thunk, err);
+      } else {
+        this._graph.setResult(thunk, result);
+      }
+      done();
+    }.bind(this));
+  };
+  Dispatcher.runGenerator = function(gen, done) {
     var oldCurrent = this._current;
     this._current = gen;
     try {
+      var sendValue = this._graph.getSendValue(gen);
       var yielded = gen.next(sendValue);
       if (yielded.done) {
         this._graph.setResult(gen, yielded.value);
@@ -187,6 +223,19 @@
     } finally {
       this._current = oldCurrent;
       done();
+    }
+  };
+  Dispatcher.runOneStep = function(obj, done) {
+    if (isGenerator(obj)) {
+      this.runGenerator(obj, done);
+    } else if (isPromise(obj)) {
+      this.runPromise(obj, done);
+    } else if (isThunk(obj)) {
+      this.runThunk(obj, done);
+    } else {
+      throw new Error(
+        'gg expects all runnable objects to be generators, promises, or ' +
+        'thunks.');
     }
   };
   Dispatcher.wait = function(gen, waitGens) {
@@ -204,11 +253,10 @@
         throw err;
       }
       var runnable = this._graph.getRunnableIds();
-      var tasks = runnable.map(function(genId) {
+      var tasks = runnable.map(function(objId) {
         return function(callback) {
-          var gen = this._graph.gen(genId);
-          var sendValue = this._graph.getSendValue(gen);
-          this.runOneStep(gen, sendValue, callback);
+          var obj = this._graph.obj(objId);
+          this.runOneStep(obj, callback);
         }.bind(this);
       }.bind(this));
       parallel(tasks, function(err) {
