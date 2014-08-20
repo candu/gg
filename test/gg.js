@@ -270,4 +270,16 @@ describe('gg', function testGG() {
     var result = yield gg.waitAll(gen, gen);
     expect(result).to.deep.equal(['test', 'test']);
   });
+  it('wait on repeated generator works', function*() {
+    var gen = foo('test');
+    var result;
+
+    result = yield gg.wait(gen);
+    expect(result).to.equal('test');
+
+    // NOTE: the generator has already run, so we can't get another value out
+    // of it.
+    result = yield gg.wait(gen);
+    expect(result).to.be.undefined;
+  });
 });

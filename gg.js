@@ -139,6 +139,7 @@
     this._refs[objId]++;
   };
   CallGraph.prototype.cleanup = function(objId) {
+    delete this._objs[objId].__id;
     delete this._objs[objId];
     delete this._nodes[objId];
     delete this._refs[objId];
