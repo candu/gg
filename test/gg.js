@@ -265,4 +265,9 @@ describe('gg', function testGG() {
     }
     expect(threwException).to.be.true;
   });
+  it('wait on duplicate generator works', function*() {
+    var gen = foo('test');
+    var result = yield gg.waitAll(gen, gen);
+    expect(result).to.deep.equal(['test', 'test']);
+  });
 });

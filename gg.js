@@ -79,6 +79,13 @@
   CallGraphNode.prototype.waitIds = function() {
     return this._waitIds;
   };
+  CallGraphNode.prototype.uniqueWaitIds = function() {
+    var waitIds = {};
+    this._waitIds.forEach(function(waitId) {
+      waitIds[waitId] = true;
+    });
+    return Object.keys(waitIds);
+  };
   CallGraphNode.prototype.setError = function(err) {
     this._error = err;
     this._hasError = true;
@@ -149,7 +156,7 @@
     var objId = this.id(obj);
     if (objId in this._nodes) {
       var node = this._nodes[objId];
-      var waitIds = this._nodes[objId].waitIds();
+      var waitIds = this._nodes[objId].uniqueWaitIds();
       waitIds.forEach(this.removeRef.bind(this));
     } else {
       this.addRef(objId);
