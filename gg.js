@@ -109,6 +109,7 @@
   function CallGraph() {
     this._objs = {};
     this._nodes = {};
+    this._refs = {};
     this._result = null;
     this._hasResult = false;
   }
@@ -124,8 +125,35 @@
   CallGraph.prototype.obj = function(objId) {
     return this._objs[objId];
   };
+  CallGraph.prototype.addRef = function(objId) {
+    if (!(objId in this._refs)) {
+      this._refs[objId] = 0;
+    }
+    this._refs[objId]++;
+  };
+  CallGraph.prototype.cleanup = function(objId) {
+    delete this._objs[objId];
+    delete this._nodes[objId];
+    delete this._refs[objId];
+  };
+  CallGraph.prototype.removeRef = function(objId) {
+    if (!(objId in this._refs)) {
+      throw new Error('cannot deref ID: ' + objId);
+    }
+    var count = --this._refs[objId];
+    if (count === 0) {
+      this.cleanup(objId);
+    }
+  };
   CallGraph.prototype.setNode = function(obj, waitGens) {
     var objId = this.id(obj);
+    if (objId in this._nodes) {
+      var node = this._nodes[objId];
+      var waitIds = this._nodes[objId].waitIds();
+      waitIds.forEach(this.removeRef.bind(this));
+    } else {
+      this.addRef(objId);
+    }
     if (waitGens === null) {
       this._nodes[objId] = new CallGraphNode(objId, null);
     } else if (!(waitGens instanceof Array)) {
@@ -138,6 +166,7 @@
   };
   CallGraph.prototype.setError = function(obj, err) {
     var objId = this.id(obj);
+    this.setNode(obj, null);
     this._nodes[objId].setError(err);
   };
   CallGraph.prototype.hasError = function(obj) {
@@ -150,6 +179,7 @@
   };
   CallGraph.prototype.setResult = function(obj, result) {
     var objId = this.id(obj);
+    this.setNode(obj, null);
     this._nodes[objId].setResult(result);
   };
   CallGraph.prototype.hasResult = function(obj) {
@@ -310,7 +340,11 @@
   Dispatcher.run = function(main, done) {
     this._current = main;
     this.wait(main, null);
-    this.runLoop(main, done);
+    this.runLoop(main, function(err, result) {
+      var mainId = this._graph.id(main);
+      this._graph.removeRef(mainId);
+      done(err, result);
+    }.bind(this));
   };
 
   // PUBLIC INTERFACE
