@@ -149,7 +149,49 @@ need to fetch a bunch of users:
 
 Ideally, we'd fetch `uid1, ..., uid4` in one database query.  `dispatch()`
 allows you to do exactly that, by providing a hook for batched operations to
-execute during the core loop.
+execute during the core loop:
 
-If you're curious what such a batched operation would look like, you can
-see a fleshed-out example in `test/gg.js`.
+    var Users = {
+      _idsToFetch: {},
+      _cache: {},
+      gen: function*(id) {
+        if (!(id in cache)) {
+          this._idsToFetch[id] = true;
+        }
+        gg.wait();
+        return this._cache[id];
+      },
+      dispatch: function(done) {
+        var ids = Object.keys(this._idsToFetch);
+        if (ids.length === 0) return done();
+        DB.getUsers(ids, function(err, results) {
+          if (err) return done(err);
+          ids.forEach(function(id) {
+            this._cache[id] = results[id];
+          }.bind(this));
+          done();
+        }.bind(this));
+      }
+    };
+
+    var fetchUser = Users.gen;
+    gg.onDispatch(Users.dispatch);
+
+The control flow is as follows:
+
+- all `fetchUser(uid)` calls hit `gg.wait()` and pause;
+- on the next iteration of the core loop, `Users.dispatch()` is called;
+- `Users.dispatch()` performs a batched DB fetch, and stores the results in
+  `Users._cache`;
+- the `fetchUser(uid)` calls resume, and read their return values from
+  `Users._cache`.
+
+In this way, all `fetchUser` calls across all generators can be batched into
+a single DB request.
+
+This is extremely powerful!  Now that all our user fetching is centralized,
+we can add caching, logging, etc. to `Users`
+*without changing the `fetchUser()` callsites*.
+
+For another example of batched access operations in `gg`, see `DT` in
+`test/gg.js`.
