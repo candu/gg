@@ -226,7 +226,7 @@
     var waitIds = node.waitIds();
     switch (nodeType) {
     case NodeType.LEAF:
-      return null;
+      return undefined;
     case NodeType.WAIT:
       var waitNode = this._nodes[waitIds[0]];
       return waitNode.result();
