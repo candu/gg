@@ -248,6 +248,7 @@
    */
   var Dispatcher = {
     _graph: new CallGraph(),
+    _running: false,
     _current: null,
     _dispatchCallbacks: [],
     _runCallbacks: {}
@@ -340,6 +341,7 @@
       }
       var runnable = this._graph.getRunnableIds();
       if (runnable.length === 0) {
+        this._running = false;
         return;
       }
       var tasks = runnable.map(function(objId) {
@@ -363,7 +365,9 @@
     this.wait(main, null);
     var mainId = this._graph.id(main);
     this._runCallbacks[mainId] = done;
-    this.runLoop();
+    if (!this._running) {
+      this.runLoop();
+    }
   };
 
   // PUBLIC INTERFACE
