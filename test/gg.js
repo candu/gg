@@ -195,7 +195,7 @@ describe('gg', function testGG() {
       }
       return true;
     }
-    var numDone = 1;
+    var numDone = 0;
     gg.run(fuzz('A'), function(err, result) {
       if (++numDone === 2) {
         done();

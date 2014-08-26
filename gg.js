@@ -312,6 +312,9 @@
     } catch (err) {
       this._graph.setError(gen, err);
       this.onDone(gen);
+      // NOTE: this has to happen before we throw back, as otherwise we enter
+      // a double-run scenario if oldCurrent waits again.
+      this._current = oldCurrent;
       oldCurrent.throw(err);
     } finally {
       this._current = oldCurrent;
