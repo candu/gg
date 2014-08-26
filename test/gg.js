@@ -5,8 +5,25 @@ var gg = require('gg'),
     Q = require('q');
 
 describe('gg', function testGG() {
+  function timeout(ms) {
+    return function(callback) {
+      setTimeout(callback, ms);
+    }
+  }
+
+  function* sleep(ms) {
+    yield gg.wait(timeout(ms));
+    return true;
+  }
+
   function* foo(value) {
+    yield gg.wait(sleep(Math.floor(Math.random() * 20)));
     return value;
+  }
+
+  function* foos(values) {
+    var results = yield gg.wait(values.map(foo));
+    return results;
   }
 
   function* bar() {
@@ -133,5 +150,20 @@ describe('gg', function testGG() {
     // of it.
     result = yield gg.wait(gen);
     expect(result).to.be.undefined;
+  });
+  it('double-run works', function(done) {
+    var numDone = 0;
+    gg.run(foos(['A', 'B']), function(err, result) {
+      expect(result).to.deep.equal(['A', 'B']);
+      if (++numDone === 2) {
+        done();
+      }
+    });
+    gg.run(foos(['C', 'D']), function(err, result) {
+      expect(result).to.deep.equal(['C', 'D']);
+      if (++numDone === 2) {
+        done();
+      }
+    });
   });
 });
