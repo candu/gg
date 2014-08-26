@@ -26,13 +26,13 @@ describe('gg', function testGG() {
     return results;
   }
 
-  function* bar() {
-    throw new Error('oops.');
+  function* bar(msg) {
+    throw new Error(msg);
   }
 
   function* baz() {
     try {
-      yield gg.wait(bar());
+      yield gg.wait(bar('from baz'));
     } catch (err) {
       throw err;
     }
@@ -75,17 +75,33 @@ describe('gg', function testGG() {
   it('exception handling works', function*() {
     var threwException = false;
     try {
-      var result = yield gg.wait(bar());
+      var result = yield gg.wait(bar('oops!'));
     } catch (e) {
+      expect(e.message).to.equal('oops!');
       threwException = true;
     }
     expect(threwException).to.be.true;
+  });
+  it('exception handling works repeatedly', function*() {
+    try {
+      var result = yield gg.wait(bar('fool me once'));
+      expect(false).to.be.true;
+    } catch (e) {
+      expect(e.message).to.equal('fool me once');
+    }
+    try {
+      var result = yield gg.wait(bar('fool me twice'));
+      expect(false).to.be.true;
+    } catch (e) {
+      expect(e.message).to.equal('fool me twice');
+    }
   });
   it('multi-level exception handling works', function*() {
     var threwException = false;
     try {
       var result = yield gg.wait(baz());
     } catch (e) {
+      expect(e.message).to.equal('from baz');
       threwException = true;
     }
     expect(threwException).to.be.true;
@@ -161,6 +177,31 @@ describe('gg', function testGG() {
     });
     gg.run(foos(['C', 'D']), function(err, result) {
       expect(result).to.deep.equal(['C', 'D']);
+      if (++numDone === 2) {
+        done();
+      }
+    });
+  });
+  it('double-run works with exception handling', function(done) {
+    var N = 100;
+    function* fuzz(msg) {
+      for (var i = 0; i < N; i++) {
+        try {
+          yield gg.wait(bar(msg));
+          expect(false).to.be.true;
+        } catch (e) {
+          expect(e.message).to.equal(msg);
+        }
+      }
+      return true;
+    }
+    var numDone = 1;
+    gg.run(fuzz('A'), function(err, result) {
+      if (++numDone === 2) {
+        done();
+      }
+    });
+    gg.run(fuzz('B'), function(err, result) {
       if (++numDone === 2) {
         done();
       }
