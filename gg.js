@@ -249,7 +249,8 @@
   var Dispatcher = {
     _graph: new CallGraph(),
     _current: null,
-    _dispatchCallbacks: []
+    _dispatchCallbacks: [],
+    _runCallbacks: {}
   };
   Dispatcher.current = function() {
     return this._current;
@@ -259,6 +260,21 @@
   };
   Dispatcher.dispatch = function(done) {
     parallel(this._dispatchCallbacks, done);
+  };
+  Dispatcher.onDone = function(obj) {
+    var objId = this._graph.id(obj);
+    if (objId in this._runCallbacks) {
+      var callback = this._runCallbacks[objId];
+      if (this._graph.hasError(obj)) {
+        var err = this._graph.error(obj);
+        callback(err);
+      } else {
+        var result = this._graph.result(obj);
+        callback(null, result);
+      }
+      this._graph.removeRef(objId);
+      delete this._runCallbacks[objId];
+    }
   };
   Dispatcher.runPromise = function(promise, done) {
     promise
@@ -290,9 +306,11 @@
       var yielded = gen.next(sendValue);
       if (yielded.done) {
         this._graph.setResult(gen, yielded.value);
+        this.onDone(gen);
       }
     } catch (err) {
       this._graph.setError(gen, err);
+      this.onDone(gen);
       oldCurrent.throw(err);
     } finally {
       this._current = oldCurrent;
@@ -315,18 +333,15 @@
   Dispatcher.wait = function(gen, waitGens) {
     this._graph.setNode(gen, waitGens);
   };
-  Dispatcher.runLoop = function(main, done) {
-    if (this._graph.hasError(main)) {
-      return done(this._graph.error(main));
-    }
-    if (this._graph.hasResult(main)) {
-      return done(null, this._graph.result(main));
-    }
+  Dispatcher.runLoop = function() {
     this.dispatch(function(err) {
       if (err) {
         throw err;
       }
       var runnable = this._graph.getRunnableIds();
+      if (runnable.length === 0) {
+        return;
+      }
       var tasks = runnable.map(function(objId) {
         return function(callback) {
           var obj = this._graph.obj(objId);
@@ -339,20 +354,16 @@
         }
         // NOTE: if you're running this from the browser, you'll need a
         // polyfill for setImmediate().
-        setImmediate(function() {
-          this.runLoop(main, done);
-        }.bind(this));
+        setImmediate(this.runLoop.bind(this));
       }.bind(this));
     }.bind(this));
   };
   Dispatcher.run = function(main, done) {
     this._current = main;
     this.wait(main, null);
-    this.runLoop(main, function(err, result) {
-      var mainId = this._graph.id(main);
-      this._graph.removeRef(mainId);
-      done(err, result);
-    }.bind(this));
+    var mainId = this._graph.id(main);
+    this._runCallbacks[mainId] = done;
+    this.runLoop();
   };
 
   // PUBLIC INTERFACE
