@@ -59,6 +59,7 @@
   function CallGraphNode(id) {
     this._id = id;
     this._type = NodeType.LEAF;
+    this._parentId = null;
     this._waitIds = [];
     this._error = null;
     this._hasError = false;
@@ -79,6 +80,12 @@
       this._type = NodeType.WAITV;
       this._waitIds = waitIds;
     }
+  };
+  CallGraphNode.prototype.setParentId = function(parentId) {
+    this._parentId = parentId;
+  };
+  CallGraphNode.prototype.parentId = function() {
+    return this._parentId;
   };
   CallGraphNode.prototype.waitIds = function() {
     return this._waitIds;
@@ -161,7 +168,10 @@
     if (objId in this._nodes) {
       node = this._nodes[objId];
       var oldWaitIds = node.uniqueWaitIds();
-      oldWaitIds.forEach(this.removeRef.bind(this));
+      oldWaitIds.forEach(function(waitId) {
+        this._nodes[waitId].setParentId(null);
+        this.removeRef(waitId);
+      }.bind(this));
     } else {
       this.addRef(objId);
       this._nodes[objId] = new CallGraphNode(objId);
@@ -171,9 +181,13 @@
       node.setWaitIds(null);
     } else if (!(waitGens instanceof Array)) {
       var waitId = this.id(waitGens);
+      this._nodes[waitId].setParentId(objId);
       node.setWaitIds(waitId);
     } else {
       var waitIds = waitGens.map(this.id.bind(this));
+      waitIds.forEach(function(waitId) {
+        this._nodes[waitId].setParentId(objId);
+      }.bind(this));
       node.setWaitIds(waitIds);
     }
   };
