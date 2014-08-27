@@ -56,18 +56,10 @@
    * A CallGraphNode represents a single call to gg.wait() or gg.waitAll(), and
    * is used to collect errors/results for that call.
    */
-  function CallGraphNode(id, waitIds) {
+  function CallGraphNode(id) {
     this._id = id;
+    this._type = NodeType.LEAF;
     this._waitIds = [];
-    if (waitIds === null) {
-      this._type = NodeType.LEAF;
-    } else if (!(waitIds instanceof Array)) {
-      this._type = NodeType.WAIT;
-      this._waitIds = [waitIds];
-    } else {
-      this._type = NodeType.WAITV;
-      this._waitIds = waitIds;
-    }
     this._error = null;
     this._hasError = false;
     this._result = null;
@@ -75,6 +67,18 @@
   }
   CallGraphNode.prototype.type = function() {
     return this._type;
+  };
+  CallGraphNode.prototype.setWaitIds = function(waitIds) {
+    if (waitIds === null) {
+      this._type = NodeType.LEAF;
+      this._waitIds = [];
+    } else if (!(waitIds instanceof Array)) {
+      this._type = NodeType.WAIT;
+      this._waitIds = [waitIds];
+    } else {
+      this._type = NodeType.WAITV;
+      this._waitIds = waitIds;
+    }
   };
   CallGraphNode.prototype.waitIds = function() {
     return this._waitIds;
@@ -155,21 +159,24 @@
   };
   CallGraph.prototype.setNode = function(obj, waitGens) {
     var objId = this.id(obj);
+    var node;
     if (objId in this._nodes) {
-      var node = this._nodes[objId];
-      var waitIds = this._nodes[objId].uniqueWaitIds();
-      waitIds.forEach(this.removeRef.bind(this));
+      node = this._nodes[objId];
+      var oldWaitIds = node.uniqueWaitIds();
+      oldWaitIds.forEach(this.removeRef.bind(this));
     } else {
       this.addRef(objId);
+      this._nodes[objId] = new CallGraphNode(objId);
+      node = this._nodes[objId];
     }
     if (waitGens === null) {
-      this._nodes[objId] = new CallGraphNode(objId, null);
+      node.setWaitIds(null);
     } else if (!(waitGens instanceof Array)) {
       var waitId = this.id(waitGens);
-      this._nodes[objId] = new CallGraphNode(objId, waitId);
+      node.setWaitIds(waitId);
     } else {
       var waitIds = waitGens.map(this.id.bind(this));
-      this._nodes[objId] = new CallGraphNode(objId, waitIds);
+      node.setWaitIds(waitIds);
     }
   };
   CallGraph.prototype.setError = function(obj, err) {
