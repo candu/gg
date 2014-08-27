@@ -121,8 +121,6 @@
     this._objs = {};
     this._nodes = {};
     this._refs = {};
-    this._result = null;
-    this._hasResult = false;
   }
   CallGraph._NEXT_ID = 0;
   CallGraph.prototype.id = function(obj) {
