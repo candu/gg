@@ -1,6 +1,4 @@
 (function() {
-  // TODO: "garbage collection" of unused CallGraph nodes
-
   // HELPER FUNCTIONS
 
   // NOTE: we implement our own version of async.parallel() to avoid
@@ -140,6 +138,11 @@
   };
   CallGraph.prototype.obj = function(objId) {
     return this._objs[objId];
+  };
+  CallGraph.prototype.parentObj = function(obj) {
+    var objId = obj.__id;
+    var parentId = this._nodes[objId].parentId();
+    return this._objs[parentId];
   };
   CallGraph.prototype.addRef = function(objId) {
     if (!(objId in this._refs)) {
